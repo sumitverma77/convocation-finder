@@ -30,7 +30,8 @@ st.markdown(
 
 
 @st.cache_data
-def load_data():
+def load_data(version):
+    """`version` (file modification times) is part of the cache key, so new CSVs are picked up after a deploy."""
     res = pd.read_csv(RESULTS_CSV)
     cand = pd.read_csv(CANDIDATES_CSV)
     # same name twice -> add "#n" so people can tell the entries apart (no other personal detail is shown)
@@ -75,7 +76,7 @@ def show_moment(c, title=None, name=None):
     st.markdown(links)
 
 
-res, cand = load_data()
+res, cand = load_data((RESULTS_CSV.stat().st_mtime, CANDIDATES_CSV.stat().st_mtime))
 
 st.markdown(
     '<div class="hero"><h1>🎓 Find Your Convocation Moment</h1>'
