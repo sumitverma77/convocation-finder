@@ -8,3 +8,4 @@ __pycache__/
 .pytest_cache/
 matched_timestamps_NEW.csv
 .claude/
+data/manual/

@@ -128,7 +128,7 @@ def main():
             cl["far"] = d is not None and d > FAR
             cl["conf"] = conf
             cl["rank"] = conf + (8 if cl["in_window"] else 0) - (8 if (exp is not None and not cl["in_window"]) else 0) - (12 if cl["far"] else 0)
-        clusters.sort(key=lambda c: -c["rank"])
+        clusters.sort(key=lambda c: -c["rank"])          # window-aware order, used to DECIDE the status
         top3 = clusters[:3]
 
         status = "none"
@@ -144,6 +144,11 @@ def main():
             elif c["conf"] >= POSSIBLE_MIN:
                 status = "possible"
         counts[status] += 1
+        # DISPLAY order: a confident answer stays first; when we are unsure, show the highest confidence first
+        if status == "confident":
+            top3 = [top3[0]] + sorted(clusters[1:], key=lambda c: (-c["conf"], not c["in_window"]))[:2]
+        else:
+            top3 = sorted(clusters, key=lambda c: (-c["conf"], not c["in_window"]))[:3]
 
         # NOTE: branch is used internally for the time prior but is deliberately NOT written to the published CSVs
         row = {"id": int(ids[si]), "name": att["name"][si], "status": status,

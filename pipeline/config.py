@@ -21,6 +21,10 @@ TRANSCRIPT_FIX = INTERIM / "transcript_fix.txt"
 TRANSCRIPT_YT = INTERIM / "transcript_yt.txt"
 TRANSCRIPT_CLEAN = INTERIM / "transcript_clean.txt"
 
+# manual review (git-ignored): the sheet you fill in, plus the answers read back by combine_results
+MANUAL = ROOT / "data" / "manual"
+REVIEW_SHEET = MANUAL / "review_sheet.xlsx"
+
 # final
 RESULTS_CSV = PROCESSED / "results.csv"        # one row per student: status, best moment, expected window
 CANDIDATES_CSV = PROCESSED / "candidates.csv"  # up to 3 candidate moments per student
