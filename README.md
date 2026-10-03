@@ -29,8 +29,10 @@ pipeline/                 Offline steps, run in order (python -m pipeline.<name>
   build_yt_transcript.py  4. YouTube captions (VTT) -> same transcript format
   match_names.py          matcher (fuzzy, per-word, one-to-one)
   combine_results.py      5. run matcher on both transcripts, add the expected-time prior, write results
+  export_review.py        6. (optional) sheet of doubtful students to fill in by hand; answers feed back into step 5
 data/raw/                 audio, VTT, PDF            (git-ignored)
 data/interim/             transcripts, attendee list (git-ignored)
+data/manual/              review_sheet.xlsx you fill in (git-ignored)
 data/processed/           results.csv (one row per student), candidates.csv (top 3 moments each)  (committed, used by the app)
 tests/                    pytest unit tests for the matcher
 docs/LEARNING_GUIDE.md    what we built, problems faced, solutions, tools explained
@@ -67,6 +69,12 @@ Each student gets a **status** and up to 3 **candidate moments**, each with a co
 
 **Expected-time prior.** Students from the same programme and seat row are called in the same part of the ceremony. From confident matches we learn an expected time per group (computed only in memory); cross-validated this predicts a student's time to within about 11 minutes (median) versus 87 minutes with no prior. Candidates inside the window get a bonus, far outside get a penalty, and weaker names are searched only inside the window.
 Two safeguards: the two best name tokens must match *different* spoken words, and very common tokens (KUMAR, SINGH, SHARMA...) cannot identify a student alone.
+
+## Manual review (you tell us the doubtful ones)
+```bash
+python -m pipeline.export_review      # writes data/manual/review_sheet.xlsx
+```
+Open the sheet: each row is a doubtful student with up to 3 clickable options (jump straight to the second). In the yellow `your_answer` column type `1`/`2`/`3` (that option is right), a time like `4:35:57` (none of them is), or `x` (not in the recording). Save, then re-run `python -m pipeline.combine_results`; those students become **confirmed** (100%, "verified by hand"). Re-exporting keeps your earlier answers.
 
 ## Current results
 Of 2,389 attendees: about 1,150 confident, 1,210 possible (candidates shown), 25 none. Manual spot checks of the confident group were about 90% correct. See `docs/LEARNING_GUIDE.md` for history and the next ideas (bigger Whisper model on the name-calling hours, a stage-order model).

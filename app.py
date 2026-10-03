@@ -97,11 +97,13 @@ if query:
         mine = cand[cand["id"] == row["id"]].sort_values("rank")
         st.subheader(row["name"])
 
-        if row["status"] == "confident":
+        if row["status"] in ("confident", "confirmed"):
             st.success(f"Congratulations {row['name'].split()[0].title()}! 🎉 We found your moment.")
             if st.session_state.get("celebrated") != int(row["id"]):
                 st.balloons()                                  # tiny bit of fun, once per student
                 st.session_state["celebrated"] = int(row["id"])
+            if row["status"] == "confirmed":
+                st.caption("✔ Verified by hand")
             show_moment(mine.iloc[0], name=row["name"])
             if len(mine) > 1:
                 with st.expander("Not you? Other possible moments"):

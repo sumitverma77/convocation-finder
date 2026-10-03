@@ -36,6 +36,42 @@ MIN_GROUP = 3
 POSSIBLE_MIN = 70
 
 
+def load_manual():
+    """Answers typed into data/manual/review_sheet.xlsx -> {id: ("pick", n) | ("time", seconds) | ("skip", None)}."""
+    import datetime as dt
+
+    from openpyxl import load_workbook
+    if not config.REVIEW_SHEET.exists():
+        return {}
+    ws = load_workbook(config.REVIEW_SHEET, data_only=True).active
+    hdr = [c.value for c in ws[1]]
+    if "your_answer" not in hdr:
+        return {}
+    i_id, i_ans = hdr.index("id"), hdr.index("your_answer")
+    out = {}
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        a, sid = row[i_ans], row[i_id]
+        if a in (None, "") or sid is None:
+            continue
+        if isinstance(a, dt.time):
+            out[int(sid)] = ("time", a.hour * 3600 + a.minute * 60 + a.second)
+        elif isinstance(a, dt.timedelta):
+            out[int(sid)] = ("time", int(a.total_seconds()))
+        elif isinstance(a, (int, float)) and int(a) in (1, 2, 3):
+            out[int(sid)] = ("pick", int(a))
+        else:
+            t = str(a).strip().lower()
+            if t in ("x", "no", "absent", "na", "n/a"):
+                out[int(sid)] = ("skip", None)
+            elif t in ("1", "2", "3"):
+                out[int(sid)] = ("pick", int(t))
+            elif ":" in t:
+                parts = [int(p) for p in t.split(":")]
+                sec = parts[0] * 3600 + parts[1] * 60 + parts[2] if len(parts) == 3 else parts[0] * 60 + parts[1]
+                out[int(sid)] = ("time", sec)
+    return out
+
+
 def hms(t):
     return f"{t // 3600}:{t % 3600 // 60:02d}:{t % 60:02d}"
 
@@ -97,7 +133,9 @@ def main():
         return cl["score"] - max(others) if others else 100.0
 
     results, candidates = [], []
-    counts = {"confident": 0, "possible": 0, "none": 0}
+    counts = {"confident": 0, "possible": 0, "none": 0, "confirmed": 0}
+    manual = load_manual()
+    print("manual answers loaded:", len(manual))
     for si in range(n):
         exp = expected(si)
         items = []   # (score, t, text, weak, source, assigned)
@@ -143,9 +181,25 @@ def main():
                 status = "confident"
             elif c["conf"] >= POSSIBLE_MIN:
                 status = "possible"
+        # ---- answers you typed into the review sheet win over everything
+        ans = manual.get(int(ids[si]))
+        if ans:
+            kind, val = ans
+            if kind == "skip":
+                status, top3 = "none", []
+            elif kind == "pick" and val <= len(top3):
+                chosen = dict(top3[val - 1], conf=100.0, sources={"manual"}, in_window=True)
+                top3 = [chosen] + [c for k, c in enumerate(top3) if k != val - 1]
+                status = "confirmed"
+            elif kind == "time":
+                chosen = {"t": val, "text": "(confirmed by hand)", "conf": 100.0, "sources": {"manual"}, "in_window": True}
+                top3 = [chosen] + top3
+                status = "confirmed"
         counts[status] += 1
         # DISPLAY order: a confident answer stays first; when we are unsure, show the highest confidence first
-        if status == "confident":
+        if status == "confirmed":
+            pass
+        elif status == "confident":
             top3 = [top3[0]] + sorted(clusters[1:], key=lambda c: (-c["conf"], not c["in_window"]))[:2]
         else:
             top3 = sorted(clusters, key=lambda c: (-c["conf"], not c["in_window"]))[:3]
