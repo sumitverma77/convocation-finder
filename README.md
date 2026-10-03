@@ -25,10 +25,10 @@ pipeline/                 Offline steps, run in order (python -m pipeline.<name>
   retranscribe_windows.py 3. re-run stretches where Whisper detected the wrong language
   build_yt_transcript.py  4. YouTube captions (VTT) -> same transcript format
   match_names.py          matcher (fuzzy, per-word, one-to-one)
-  combine_results.py      5. run matcher on both transcripts, merge, write results
+  combine_results.py      5. run matcher on both transcripts, add the branch/seat time prior, write results
 data/raw/                 audio, VTT, PDF            (git-ignored)
 data/interim/             transcripts, attendee list (git-ignored)
-data/processed/           matched_timestamps.csv, needs_review.csv  (committed, used by the app)
+data/processed/           results.csv (one row per student), candidates.csv (top 3 moments each)  (committed, used by the app)
 tests/                    pytest unit tests for the matcher
 docs/LEARNING_GUIDE.md    what we built, problems faced, solutions, tools explained
 requirements.txt          app dependencies (Streamlit Cloud)
@@ -55,10 +55,18 @@ python -m pipeline.combine_results
 python -m pytest
 ```
 
+## How a result is decided
+Each student gets a **status** and up to 3 **candidate moments**, each with a confidence score (shown in the app):
+
+* **confident**: both transcripts (Whisper + YouTube captions) found the name at the same time, or one found it very clearly, and the time fits the student's branch.
+* **possible**: we have candidates but are not sure; the app shows up to 3 videos side by side with scores.
+* **none**: nothing usable; the app shows the time window in which that student's branch was called.
+
+**Branch / seat-row prior.** Students of one branch are called in one part of the ceremony (e.g. BCE about 3h20-6h30), and seat rows A, B, C... are called roughly in turn. From confident matches we learn the expected time per (branch, seat row); cross-validated this predicts a student's time to within about 11 minutes (median) versus 87 minutes with no prior. Candidates inside the window get a bonus, far outside get a penalty, and weaker names are searched only inside the window.
+Two safeguards: the two best name tokens must match *different* spoken words, and very common tokens (KUMAR, SINGH, SHARMA...) cannot identify a student alone.
+
 ## Current results
-1,154 of 2,279 attendees (~51%) located confidently; about 90% of a manual sample was correct.
-The rest are in `needs_review.csv` and shown as "not located yet". See `docs/LEARNING_GUIDE.md`
-for how the numbers were obtained and what to improve next (seat-order window pass, bigger Whisper model).
+Of 2,389 attendees: about 1,150 confident, 1,210 possible (candidates shown), 25 none. Manual spot checks of the confident group were about 90% correct. See `docs/LEARNING_GUIDE.md` for history and the next ideas (bigger Whisper model on the name-calling hours, a stage-order model).
 
 ## Deploy
 Streamlit Community Cloud: repo `sumitverma77/convocation-finder`, branch `main`, main file `app.py`.

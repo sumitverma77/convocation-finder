@@ -20,8 +20,7 @@ TRANSCRIPT_WHISPER = INTERIM / "transcript_whisper.txt"
 TRANSCRIPT_FIX = INTERIM / "transcript_fix.txt"
 TRANSCRIPT_YT = INTERIM / "transcript_yt.txt"
 TRANSCRIPT_CLEAN = INTERIM / "transcript_clean.txt"
-COMPARISON_REPORT = INTERIM / "comparison_report.csv"
 
 # final
-MATCHED_CSV = PROCESSED / "matched_timestamps.csv"
-REVIEW_CSV = PROCESSED / "needs_review.csv"
+RESULTS_CSV = PROCESSED / "results.csv"        # one row per student: status, best moment, expected window
+CANDIDATES_CSV = PROCESSED / "candidates.csv"  # up to 3 candidate moments per student

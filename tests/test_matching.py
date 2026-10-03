@@ -28,3 +28,13 @@ def test_fuzzy_match_finds_misspelled_names(tmp_path, monkeypatch):
     res = mn.match(lines, write=False)
     assert res["RAHUL KUMAR SHARMA"][1] == t0 + 10
     assert res["PRIYA VERMA"][1] == t0 + 20
+
+
+def test_two_common_surnames_do_not_identify_a_student(tmp_path, monkeypatch):
+    csv = tmp_path / "attendees.csv"
+    names = ["SHASHANK KUMAR SINGH"] + [f"PERSON{i} KUMAR SINGH" for i in range(30)]
+    pd.DataFrame({"Name": names}).to_csv(csv, index=False)
+    monkeypatch.setattr(mn, "ATTENDEES_CSV", csv)
+    t0 = mn.ZONE_START_MIN * 60
+    res = mn.match([(t0 + 10, "Vikas Kumar Singh")])
+    assert "SHASHANK KUMAR SINGH" not in res
