@@ -101,6 +101,23 @@ An independent check of the first version found the output was NOT reliable. Num
 
 ---
 
+### Round 3: Compare with YouTube's own captions and combine
+
+YouTube generates English auto-captions after a stream ends (`yt-dlp --skip-download --write-auto-subs --sub-langs en-orig --sub-format vtt`). We now run the matcher on **both** transcripts and merge (`build_yt_transcript.py` -> `transcript_yt.txt`, then `combine_results.py`):
+
+| Result per student | Count | Used as |
+|---|---|---|
+| Both transcripts agree (within 90 s) | 725 | confident (highest trust) |
+| Only one transcript, score >= 93 | 429 (210 Whisper + 219 YouTube) | confident |
+| Transcripts disagree (different time) | 128 | needs_review |
+| Weak / single low score | 679 | needs_review |
+| Not found in either | 318 | needs_review |
+
+Confident total: **1,154 of 2,279 (~51%)**, up from 1,019 with Whisper alone. Agreement between two independent speech-to-text systems is the strongest signal we have; disagreements are deliberately not shown to students. `comparison_report.csv` (local only) lists both guesses per student for manual review.
+Still missing (examples): AVICHAL DWIVEDI, RISHABH MUNJAL: both systems garbled them. Next ideas: neighbour-window pass using seat order, and a bigger Whisper model on the name-calling hours.
+
+---
+
 ## 🚀 How to Run & Deploy This Project
 
 ### Part 1: Generating the Data (Backend)

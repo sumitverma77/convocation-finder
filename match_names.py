@@ -101,8 +101,10 @@ def load_attendees():
     return out
 
 
-def match():
-    lines = build_transcript()
+def match(lines=None, write=True):
+    """Return {official name: (score, seconds, heard text, weakest token score)} for every matched name."""
+    if lines is None:
+        lines = build_transcript()
     chunks = make_chunks(lines)
     print(f"transcript lines kept: {len(lines)}, name chunks: {len(chunks)}")
 
@@ -164,6 +166,9 @@ def match():
         t, text, _ = chunks[ci]
         results[si] = (score, t, text, weak)
 
+    if not write:
+        return {names[si]: r for si, r in results.items()}
+
     rows_ok, rows_review = [], []
     for si, n in enumerate(names):
         if si in results:
@@ -183,6 +188,7 @@ def match():
     pd.DataFrame(rows_ok).to_csv(OUT_OK, index=False)
     pd.DataFrame(rows_review).to_csv(OUT_REVIEW, index=False)
     print(f"confident: {len(rows_ok)}  needs review: {len(rows_review)}  total: {len(names)}")
+    return {names[si]: r for si, r in results.items()}
 
 
 if __name__ == "__main__":

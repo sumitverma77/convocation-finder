@@ -5,3 +5,6 @@ transcript*.txt
 matched_timestamps_NEW.csv
 attendees.csv
 __pycache__/
+*.vtt
+comparison_report.csv
+matched_whisper_only_backup.csv
