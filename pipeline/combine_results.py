@@ -32,7 +32,7 @@ BOTH_SOURCES_MIN = 80
 WINDOW = 45 * 60           # half-width of the expected-time window
 FAR = 2 * WINDOW           # beyond this from the expected time, a match is suspicious
 OUTLIER = 120 * 60         # anchors this far from their branch median are ignored when learning the prior
-MIN_GROUP = 3
+MIN_GROUP = 6
 POSSIBLE_MIN = 70
 
 
@@ -41,14 +41,22 @@ def load_manual():
     import datetime as dt
 
     from openpyxl import load_workbook
+    out = {}
+    if config.KNOWN_ANSWERS.exists():           # name,time rows you typed yourself (matched by official name)
+        att_ = mn.load_attendees()
+        by_name = {n: int(i) for n, i in zip(att_["name"], att_["order"] if "order" in att_.columns else range(len(att_)))}
+        for _, kr in pd.read_csv(config.KNOWN_ANSWERS).iterrows():
+            sid = by_name.get(str(kr["name"]).strip().upper())
+            parts = [int(p) for p in str(kr["time"]).split(":")]
+            if sid is not None:
+                out[sid] = ("time", parts[0] * 3600 + parts[1] * 60 + parts[2] if len(parts) == 3 else parts[0] * 60 + parts[1])
     if not config.REVIEW_SHEET.exists():
-        return {}
+        return out
     ws = load_workbook(config.REVIEW_SHEET, data_only=True).active
     hdr = [c.value for c in ws[1]]
     if "your_answer" not in hdr:
-        return {}
+        return out
     i_id, i_ans = hdr.index("id"), hdr.index("your_answer")
-    out = {}
     for row in ws.iter_rows(min_row=2, values_only=True):
         a, sid = row[i_ans], row[i_id]
         if a in (None, "") or sid is None:
@@ -90,6 +98,13 @@ def main():
     print("== Whisper transcript ==")
     sc_w = mn.Scorer(mn.build_transcript(), att)
     asg_w, cand_w = sc_w.first_pass(n)
+    sc_w2 = None
+    if config.TRANSCRIPT_FIX_B.exists():
+        print("== Whisper, second sample of the repaired windows ==")
+        sc_w2 = mn.Scorer(mn.build_transcript(config.TRANSCRIPT_FIX_B, write=False), att)
+        asg_w2, cand_w2 = sc_w2.first_pass(n)
+    else:
+        asg_w2, cand_w2 = {}, {}
     print("== YouTube captions ==")
     sc_y = mn.Scorer(mn.clean_lines(mn.read_lines(config.TRANSCRIPT_YT)), att)
     asg_y, cand_y = sc_y.first_pass(n)
@@ -97,7 +112,7 @@ def main():
     # ---- learn the branch / seat-row prior from students both transcripts agree on
     anchors = {}
     for si in range(n):
-        w, y = asg_w.get(si), asg_y.get(si)
+        w, y = asg_w.get(si) or asg_w2.get(si), asg_y.get(si)
         if w and y and abs(w[1] - y[1]) <= AGREE_SECONDS:
             anchors[si] = w[1]
     by_branch = {}
@@ -121,7 +136,7 @@ def main():
 
     # who else is competing for the same spoken chunk? (source, second) -> scores of all students that list it
     competitors = {}
-    for src, cands in (("whisper", cand_w), ("youtube", cand_y)):
+    for src, cands in (("whisper", cand_w), ("whisper", cand_w2), ("youtube", cand_y)):
         for si_, lst in cands.items():
             for c in lst:
                 competitors.setdefault((src, c[1]), []).append((c[0], si_))
@@ -139,12 +154,12 @@ def main():
     for si in range(n):
         exp = expected(si)
         items = []   # (score, t, text, weak, source, assigned)
-        for src, cands, asg in (("whisper", cand_w, asg_w), ("youtube", cand_y, asg_y)):
+        for src, cands, asg in (("whisper", cand_w, asg_w), ("whisper", cand_w2, asg_w2), ("youtube", cand_y, asg_y)):
             a = asg.get(si)
             for c in cands.get(si, []):
                 items.append((*c, src, a is not None and a[1] == c[1]))
         if exp is not None:
-            sc_pairs = (("whisper", sc_w, asg_w), ("youtube", sc_y, asg_y))
+            sc_pairs = [("whisper", sc_w, asg_w), ("youtube", sc_y, asg_y)] + ([("whisper", sc_w2, asg_w2)] if sc_w2 else [])
             for src, sc, asg in sc_pairs:
                 for c in sc.window_candidates(si, exp - WINDOW, exp + WINDOW):
                     items.append((*c, src, False))
@@ -155,17 +170,23 @@ def main():
                 if abs(cl["t"] - it[1]) <= CLUSTER_SECONDS:
                     cl["sources"].add(it[4])
                     cl["assigned"] |= it[5]
+                    if it[4] == "youtube" and "t_yt" not in cl:
+                        cl["t_yt"] = it[1]
                     break
             else:
                 clusters.append({"t": it[1], "text": it[2], "score": it[0], "weak": it[3],
-                                 "sources": {it[4]}, "assigned": it[5]})
+                                 "sources": {it[4]}, "assigned": it[5],
+                                 **({"t_yt": it[1]} if it[4] == "youtube" else {})})
         for cl in clusters:
             conf = min(100.0, cl["score"] + 5 * (len(cl["sources"]) - 1))
             d = abs(cl["t"] - exp) if exp is not None else None
             cl["in_window"] = d is not None and d <= WINDOW
             cl["far"] = d is not None and d > FAR
             cl["conf"] = conf
-            cl["rank"] = conf + (8 if cl["in_window"] else 0) - (8 if (exp is not None and not cl["in_window"]) else 0) - (12 if cl["far"] else 0)
+            # the expected window is only a soft hint (median error ~11 min, 80% within 46 min): small bonus/penalty,
+            # a bigger one far outside it, and a weak second token must not win just because the time fits
+            cl["rank"] = (conf + (4 if cl["in_window"] else 0) - (4 if (exp is not None and not cl["in_window"]) else 0)
+                          - (12 if cl["far"] else 0) - (10 if cl["weak"] < mn.MIN_TOKEN else 0))
         clusters.sort(key=lambda c: -c["rank"])          # window-aware order, used to DECIDE the status
         top3 = clusters[:3]
 
@@ -210,14 +231,35 @@ def main():
                "expected_to": int(exp + WINDOW) if exp is not None else ""}
         if top3 and status != "none":
             c = top3[0]
-            row.update({"seconds": max(c["t"] - 3, 0), "timestamp": hms(c["t"]), "heard": c["text"],
+            row.update({"seconds": max(c.get("t_yt", c["t"]) - 3, 0), "timestamp": hms(c.get("t_yt", c["t"])), "heard": c["text"],
                         "confidence": round(c["conf"])})
         results.append(row)
         if status != "none":
             for r, c in enumerate(top3, 1):
-                candidates.append({"id": int(ids[si]), "rank": r, "seconds": max(c["t"] - 3, 0),
-                                   "timestamp": hms(c["t"]), "heard": c["text"], "confidence": round(c["conf"]),
+                candidates.append({"id": int(ids[si]), "rank": r, "seconds": max(c.get("t_yt", c["t"]) - 3, 0),
+                                   "timestamp": hms(c.get("t_yt", c["t"])), "heard": c["text"], "confidence": round(c["conf"]),
                                    "sources": "+".join(sorted(c["sources"])), "in_window": bool(c["in_window"])})
+
+    # one spoken name belongs to one student: if several students are "confident" for the same moment, keep only a
+    # clear winner (score lead >= 3), otherwise demote them all to "possible" so the app shows the options
+    conf_rows = [r for r in results if r["status"] == "confident"]
+    by_moment = {}
+    for r in conf_rows:
+        by_moment.setdefault(r["seconds"], []).append(r)
+    clashes = 0
+    for group in by_moment.values():
+        if len(group) > 1:
+            group.sort(key=lambda r: -r["confidence"])
+            if group[0]["confidence"] - group[1]["confidence"] < 3:
+                losers = group
+            else:
+                losers = group[1:]
+            for r in losers:
+                r["status"] = "possible"
+                counts["confident"] -= 1
+                counts["possible"] += 1
+                clashes += 1
+    print("confident clashes on the same moment demoted:", clashes)
 
     res = pd.DataFrame(results)
     cand = pd.DataFrame(candidates)

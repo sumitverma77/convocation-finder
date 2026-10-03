@@ -14,7 +14,7 @@ from pipeline import config
 AUDIO_FILE = str(config.AUDIO_FILE)
 OUT_FILE = config.TRANSCRIPT_FIX
 # (start_minute, end_minute) windows that contain Urdu-script garbage
-WINDOWS = [(145, 185), (238, 280)]
+WINDOWS = config.FIX_WINDOWS
 
 model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=12)
 
@@ -27,7 +27,7 @@ with open(OUT_FILE, "w", encoding="utf-8") as out:
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
         )
         segments, _ = model.transcribe(
-            wav, language="en", beam_size=5, vad_filter=True,
+            wav, language="en", beam_size=5, vad_filter=False, condition_on_previous_text=False,
             initial_prompt="Convocation ceremony. The announcer reads Indian student names, "
                            "programme and rank, for example: Gurleen Kaur Makhija, B.Tech Computer Science.",
         )

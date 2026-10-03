@@ -25,12 +25,15 @@ from pipeline import config
 ATTENDEES_CSV = config.ATTENDEES_CSV
 TRANSCRIPT_FILE = config.TRANSCRIPT_WHISPER
 FIX_FILE = config.TRANSCRIPT_FIX
-FIX_WINDOWS = [(145, 185), (238, 280)]   # minutes replaced by FIX_FILE
+FIX_WINDOWS = config.FIX_WINDOWS   # minutes replaced by FIX_FILE
 CLEAN_TRANSCRIPT = config.TRANSCRIPT_CLEAN
 
 CONFIDENT = 90           # average score of the two best tokens
 MIN_WEAK_CONFIDENT = 80  # and the weaker of those two tokens must be at least this
 MIN_TOKEN = 72           # first pass: each of the two best tokens must reach this
+ONE_NAME_MIN_LEN = 6      # one-name fallback: token at least this long ...
+ONE_NAME_MIN_SIM = 88      # ... matching this well ...
+ONE_NAME_CAP = 78          # ... can never score above this (stays "possible")
 COMMON_TOKEN_COUNT = 25  # a name token shared by this many attendees is "common"
 RELAXED_TOKEN = 62       # window pass: lower bar, because the time window already narrows it down
 RELAXED_SCORE = 70
@@ -63,10 +66,12 @@ def clean_lines(lines):
     return out
 
 
-def build_transcript():
+def build_transcript(fix_file=None, write=True):
+    """Whisper transcript with the broken windows replaced by a repaired pass (fix_file, default transcript_fix.txt).
+    Whisper is not deterministic, so a second repaired sample (transcript_fix_b.txt) can be used as extra evidence."""
     lines = read_lines(TRANSCRIPT_FILE)
     try:
-        fix = read_lines(FIX_FILE)
+        fix = read_lines(fix_file or FIX_FILE)
     except FileNotFoundError:
         fix = []
     if fix:
@@ -135,15 +140,20 @@ class Scorer:
                     self.tok_index[t] = len(tokens)
                     tokens.append(t)
         # very common tokens (KUMAR, SINGH, SHARMA ...) say little about *who* was called
+        self.tokens = tokens
         self.common = {self.tok_index[t] for t, c in freq.items() if c >= COMMON_TOKEN_COUNT}
         S = np.maximum(
             cdist(tokens, flat_words, scorer=fuzz.ratio, dtype=np.float32, workers=-1),
             cdist(tokens, flat_words, scorer=JaroWinkler.similarity, dtype=np.float32, workers=-1) * 100,
         )
+        # a spoken word much shorter than the name token ("my" vs MAYANK) is not real evidence: scale it down
+        lt = np.array([len(t) for t in tokens], dtype=np.float32)[:, None]
+        lw = np.array([len(w) for w in flat_words], dtype=np.float32)[None, :]
+        S = S * np.minimum(1.0, (lw + 1) / (0.7 * lt))
         self.S = S                                                # tokens x words
         self.offsets = offsets
         self.lens = np.array([len(c[2]) for c in self.chunks])
-        self.M = np.maximum.reduceat(S, offsets, axis=1)          # tokens x chunks (best word per token)
+        self.M = np.maximum.reduceat(self.S, offsets, axis=1)     # tokens x chunks (best word per token)
 
     def _exact(self, tidx, ci):
         """Exact (score, weak) of a student against chunk ci: the two best tokens must match DIFFERENT words."""
@@ -164,6 +174,13 @@ class Scorer:
                 avg = tot[i, j] / 2
                 if avg > best_avg:
                     best_avg, best_weak = float(avg), float(min(sub[a, i], sub[b, j]))
+        # Surname garbled but a long, uncommon first name matches almost perfectly (e.g. "Shambhabi teach her" for
+        # SHAMBHAVI JHA): keep it as a weak candidate. Capped below the confident level, so it is only ever "possible".
+        rare = [k for k, t in enumerate(tidx) if t not in self.common and len(self.tokens[t]) >= ONE_NAME_MIN_LEN]
+        if rare:
+            top = float(max(sub[k].max() for k in rare))
+            if top >= ONE_NAME_MIN_SIM and min(ONE_NAME_CAP, 0.85 * top) > best_avg:
+                return min(ONE_NAME_CAP, 0.85 * top), top
         return best_avg, best_weak
 
     def student_scores(self, si, restrict=None, top=30):

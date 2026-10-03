@@ -25,7 +25,7 @@ pipeline/                 Offline steps, run in order (python -m pipeline.<name>
   config.py               every file path in one place
   extract_attendees.py    1. seating PDF -> attendee names
   transcribe_audio.py     2. audio -> Whisper transcript (1-hour chunks)
-  retranscribe_windows.py 3. re-run stretches where Whisper detected the wrong language
+  retranscribe_windows.py 3. re-run stretches where Whisper detected the wrong language / dropped names (config.FIX_WINDOWS)
   build_yt_transcript.py  4. YouTube captions (VTT) -> same transcript format
   match_names.py          matcher (fuzzy, per-word, one-to-one)
   combine_results.py      5. run matcher on both transcripts, add the expected-time prior, write results
@@ -76,8 +76,15 @@ python -m pipeline.export_review      # writes data/manual/review_sheet.xlsx
 ```
 Open the sheet: each row is a doubtful student with up to 3 clickable options (jump straight to the second). In the yellow `your_answer` column type `1`/`2`/`3` (that option is right), a time like `4:35:57` (none of them is), or `x` (not in the recording). Save, then re-run `python -m pipeline.combine_results`; those students become **confirmed** (100%, "verified by hand"). Re-exporting keeps your earlier answers.
 
+## What improved accuracy (and why)
+* **Whisper repair windows**: in some stretches (e.g. 4:22-4:40) Whisper wrote Urdu script or dropped names, leaving YouTube alone. Those stretches (found by comparing line counts per 10 minutes) are re-transcribed in forced English without the voice-activity filter. Whisper is not deterministic, so an earlier second sample (`transcript_fix_b.txt`) is kept as extra evidence.
+* **Per-name time from YouTube captions** (about one name per line) when both sources agree, so the link lands on the name.
+* **Matching rules**: two name tokens must match different spoken words; common surnames cannot identify a student alone; very short spoken words ("my") are discounted; a long uncommon first name alone gives only a capped "possible" candidate (e.g. "Shambhabi teach her" for SHAMBHAVI JHA).
+* **One spoken name = one student**: if several students would be "confident" for the same moment, only a clear winner keeps it.
+* **Known answers**: `data/manual/known_answers.csv` (`name,time`) lets you type in moments you read from the subtitles; they become "confirmed".
+
 ## Current results
-Of 2,389 attendees: about 1,150 confident, 1,210 possible (candidates shown), 25 none. Manual spot checks of the confident group were about 90% correct. See `docs/LEARNING_GUIDE.md` for history and the next ideas (bigger Whisper model on the name-calling hours, a stage-order model).
+Of 2,389 attendees: about 1,340 confident or confirmed (56%), about 1,020 possible (candidates shown), about 30 none. Manual spot checks of the confident group: 30 of 30 plausible in the latest sample, about 90-95% over several samples. See `docs/LEARNING_GUIDE.md` for history and the next ideas (bigger Whisper model on the name-calling hours, a stage-order model).
 
 ## Deploy
 Streamlit Community Cloud: repo `sumitverma77/convocation-finder`, branch `main`, main file `app.py`.
