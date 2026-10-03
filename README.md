@@ -15,6 +15,9 @@ A **Python data / AI pipeline plus a small web app**. It is applied AI, not mode
 
 Pipeline: **audio -> transcripts (2 sources) -> match against the attendee list -> CSV -> search app.**
 
+## Privacy
+The attendee list was shared internally. The published files (`data/processed/`) contain only name, status, timestamps and confidence: no branch, registration number or seat. Inputs (`data/raw`, `data/interim`) are git-ignored.
+
 ## Layout
 ```
 app.py                    Streamlit app (deployed). Reads data/processed/*.csv
@@ -25,7 +28,7 @@ pipeline/                 Offline steps, run in order (python -m pipeline.<name>
   retranscribe_windows.py 3. re-run stretches where Whisper detected the wrong language
   build_yt_transcript.py  4. YouTube captions (VTT) -> same transcript format
   match_names.py          matcher (fuzzy, per-word, one-to-one)
-  combine_results.py      5. run matcher on both transcripts, add the branch/seat time prior, write results
+  combine_results.py      5. run matcher on both transcripts, add the expected-time prior, write results
 data/raw/                 audio, VTT, PDF            (git-ignored)
 data/interim/             transcripts, attendee list (git-ignored)
 data/processed/           results.csv (one row per student), candidates.csv (top 3 moments each)  (committed, used by the app)
@@ -58,11 +61,11 @@ python -m pytest
 ## How a result is decided
 Each student gets a **status** and up to 3 **candidate moments**, each with a confidence score (shown in the app):
 
-* **confident**: both transcripts (Whisper + YouTube captions) found the name at the same time, or one found it very clearly, and the time fits the student's branch.
+* **confident**: both transcripts (Whisper + YouTube captions) found the name at the same time, or one found it very clearly, and the time fits where the student was expected.
 * **possible**: we have candidates but are not sure; the app shows up to 3 videos side by side with scores.
-* **none**: nothing usable; the app shows the time window in which that student's branch was called.
+* **none**: nothing usable; the app shows the time window in which students seated near them were called.
 
-**Branch / seat-row prior.** Students of one branch are called in one part of the ceremony (e.g. BCE about 3h20-6h30), and seat rows A, B, C... are called roughly in turn. From confident matches we learn the expected time per (branch, seat row); cross-validated this predicts a student's time to within about 11 minutes (median) versus 87 minutes with no prior. Candidates inside the window get a bonus, far outside get a penalty, and weaker names are searched only inside the window.
+**Expected-time prior.** Students from the same programme and seat row are called in the same part of the ceremony. From confident matches we learn an expected time per group (computed only in memory); cross-validated this predicts a student's time to within about 11 minutes (median) versus 87 minutes with no prior. Candidates inside the window get a bonus, far outside get a penalty, and weaker names are searched only inside the window.
 Two safeguards: the two best name tokens must match *different* spoken words, and very common tokens (KUMAR, SINGH, SHARMA...) cannot identify a student alone.
 
 ## Current results

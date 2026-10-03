@@ -11,7 +11,10 @@ st.set_page_config(page_title="Find Your Convocation Moment", page_icon="🎓")
 def load_data():
     res = pd.read_csv(RESULTS_CSV)
     cand = pd.read_csv(CANDIDATES_CSV)
-    res["label"] = res["name"] + "  ·  " + res["branch"].fillna("")
+    # same name twice -> add "#n" so people can tell the entries apart (no other personal detail is shown)
+    dup = res.groupby("name").cumcount() + 1
+    multi = res.groupby("name")["name"].transform("size") > 1
+    res["label"] = res["name"].where(~multi, res["name"] + "  ·  #" + dup.astype(str))
     return res, cand
 
 
@@ -26,7 +29,7 @@ def show_moment(c, title=None):
     st.markdown(
         f"Name match confidence: **{int(c['confidence'])}%** &nbsp;·&nbsp; "
         f"Time in video: **{c['timestamp']}**"
-        + (" &nbsp;·&nbsp; ✅ fits your branch's part of the ceremony" if c.get("in_window") else "")
+        + (" &nbsp;·&nbsp; ✅ time fits where you were expected" if c.get("in_window") else "")
     )
     st.caption(f"What the speech recognition heard here: “{c['heard']}” (source: {c['sources']})"
                if "sources" in c and pd.notna(c.get("sources")) else f"Heard: “{c['heard']}”")
@@ -52,7 +55,6 @@ if query:
         row = res[res["label"] == label].iloc[0]
         mine = cand[cand["id"] == row["id"]].sort_values("rank")
         st.subheader(row["name"])
-        st.caption(f"Branch: {row['branch']}")
 
         if row["status"] == "confident":
             st.success(f"High confidence ({int(row['confidence'])}%): we found your moment.")
@@ -72,14 +74,14 @@ if query:
                 with tab:
                     show_moment(c)
             if pd.notna(row["expected_from"]) and row["expected_from"] != "":
-                st.caption(f"Students of {row['branch']} were mostly called between "
+                st.caption(f"Students seated near you were mostly called between "
                            f"{hms(row['expected_from'])} and {hms(row['expected_to'])}.")
 
         else:
             st.info("We could not find your name in the recording.")
             if pd.notna(row["expected_from"]) and row["expected_from"] != "":
                 start = int(row["expected_from"])
-                st.write(f"Students of **{row['branch']}** were mostly called between "
+                st.write(f"Students seated near you were mostly called between "
                          f"**{hms(row['expected_from'])}** and **{hms(row['expected_to'])}**. "
                          "You can scrub through that part of the video.")
                 st.markdown(f"[Open the video at {hms(start)}](https://youtu.be/{VIDEO_ID}?t={start})")
@@ -87,4 +89,4 @@ if query:
 
 st.write("---")
 st.caption("Built with Python, Whisper, RapidFuzz and Streamlit. Confidence = how closely the name heard matches "
-           "your official name, boosted when two independent transcripts agree and the time fits your branch.")
+           "your official name, boosted when two independent transcripts agree and the time fits where you were expected.")

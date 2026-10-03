@@ -13,6 +13,8 @@ Status per student
   none       nothing usable; the app shows the expected time window for the student's branch
 
 Writes data/processed/results.csv (one row per student) and candidates.csv (top 3 per student).
+Privacy: the attendee list was shared internally, so branch / registration number are never written to these
+published files; they are only used in memory to compute the expected time window.
 Run from the repo root: python -m pipeline.combine_results
 """
 import numpy as np
@@ -125,7 +127,8 @@ def main():
                 status = "possible"
         counts[status] += 1
 
-        row = {"id": int(ids[si]), "name": att["name"][si], "branch": att["branch"][si], "status": status,
+        # NOTE: branch is used internally for the time prior but is deliberately NOT written to the published CSVs
+        row = {"id": int(ids[si]), "name": att["name"][si], "status": status,
                "expected_from": int(max(exp - WINDOW, 0)) if exp is not None else "",
                "expected_to": int(exp + WINDOW) if exp is not None else ""}
         if top3 and status != "none":
