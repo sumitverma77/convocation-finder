@@ -1,0 +1,7 @@
+# large / intermediate files - not needed to run the app
+*.m4a
+*.wav
+transcript*.txt
+matched_timestamps_NEW.csv
+attendees.csv
+__pycache__/
