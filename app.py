@@ -2,17 +2,17 @@ import pandas as pd
 import streamlit as st
 from rapidfuzz import fuzz, process
 
-VIDEO_ID = "iZuGjFTKXL8"
+from pipeline.config import MATCHED_CSV, REVIEW_CSV, VIDEO_ID
 
 st.set_page_config(page_title="Find Your Convocation Moment", page_icon="🎓")
 
 
 @st.cache_data
 def load_data():
-    ok = pd.read_csv("matched_timestamps.csv")
+    ok = pd.read_csv(MATCHED_CSV)
     ok["found"] = True
     try:
-        review = pd.read_csv("needs_review.csv")
+        review = pd.read_csv(REVIEW_CSV)
     except FileNotFoundError:
         review = pd.DataFrame(columns=ok.columns)
     review["found"] = False

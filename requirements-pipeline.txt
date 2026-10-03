@@ -1,0 +1,8 @@
+# Offline pipeline (audio -> transcript -> matching). Install on your own machine:
+#   pip install -r requirements-pipeline.txt
+# Also needs ffmpeg and yt-dlp on PATH.
+-r requirements.txt
+numpy
+faster-whisper
+pdfplumber
+pytest

@@ -1,15 +1,18 @@
 """Re-transcribe the time windows where Whisper auto-detected the wrong language
 (Urdu script instead of English) by forcing language="en".
 
-Output: transcript_fix.txt with absolute [MM:SS] timestamps (same format as transcript.txt).
-Run: python retranscribe_windows.py
+Output: data/interim/transcript_fix.txt with absolute [MM:SS] timestamps (same format as transcript.txt).
+Step 3. Run from the repo root: python -m pipeline.retranscribe_windows
 """
 import os
 import subprocess
+
 from faster_whisper import WhisperModel
 
-AUDIO_FILE = "livestream_audio.m4a"
-OUT_FILE = "transcript_fix.txt"
+from pipeline import config
+
+AUDIO_FILE = str(config.AUDIO_FILE)
+OUT_FILE = config.TRANSCRIPT_FIX
 # (start_minute, end_minute) windows that contain Urdu-script garbage
 WINDOWS = [(145, 185), (238, 280)]
 
@@ -17,7 +20,7 @@ model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=12)
 
 with open(OUT_FILE, "w", encoding="utf-8") as out:
     for start_min, end_min in WINDOWS:
-        wav = f"_win_{start_min}.wav"
+        wav = str(config.INTERIM / f"_win_{start_min}.wav")
         subprocess.run(
             ["ffmpeg", "-y", "-ss", str(start_min * 60), "-t", str((end_min - start_min) * 60),
              "-i", AUDIO_FILE, "-vn", "-ac", "1", "-ar", "16000", wav],

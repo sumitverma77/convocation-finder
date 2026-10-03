@@ -4,12 +4,14 @@ Rules per student
   * both transcripts find them within 90 s of each other  -> agreement: confident, best score + 5 bonus
   * only one transcript finds them                         -> confident only if score >= SINGLE_SOURCE_MIN
   * transcripts disagree (different place)                 -> goes to needs_review (best guess kept)
-Writes matched_timestamps.csv, needs_review.csv, comparison_report.csv.
+Writes data/processed/matched_timestamps.csv + needs_review.csv and data/interim/comparison_report.csv.
 
-Run: python combine_results.py
+Step 5. Run from the repo root: python -m pipeline.combine_results
 """
 import pandas as pd
-import match_names as mn
+
+from pipeline import config
+from pipeline import match_names as mn
 
 AGREE_SECONDS = 90
 SINGLE_SOURCE_MIN = 93   # one transcript alone must be very sure
@@ -26,7 +28,7 @@ def clean(lines):
 print("== Whisper transcript ==")
 whisper = mn.match(mn.build_transcript(), write=False)
 print("== YouTube captions ==")
-yt = mn.match(clean(read_lines("transcript_yt.txt")), write=False)
+yt = mn.match(clean(read_lines(config.TRANSCRIPT_YT)), write=False)
 
 names = mn.load_attendees()
 
@@ -71,6 +73,6 @@ for n in names:
 pd.DataFrame(ok).to_csv(mn.OUT_OK, index=False)
 pd.DataFrame(review).to_csv(mn.OUT_REVIEW, index=False)
 rep = pd.DataFrame(report)
-rep.to_csv("comparison_report.csv", index=False)
+rep.to_csv(config.COMPARISON_REPORT, index=False)
 print("\n", rep["status"].value_counts().to_string())
 print(f"\nconfident total: {len(ok)}  needs review: {len(review)}  of {len(names)}")

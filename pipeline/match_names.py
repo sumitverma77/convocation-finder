@@ -10,7 +10,8 @@ Pipeline
   4. Greedy one-to-one assignment: a chunk can only belong to one student, a student gets one chunk.
   5. Write matched_timestamps.csv (confident) and needs_review.csv (the rest).
 
-Run: python match_names.py
+Run from the repo root: python -m pipeline.match_names   (Whisper transcript only)
+Usually you want pipeline.combine_results instead, which also uses the YouTube captions.
 """
 import re
 import numpy as np
@@ -19,14 +20,16 @@ from rapidfuzz import fuzz
 from rapidfuzz.distance import JaroWinkler
 from rapidfuzz.process import cdist
 
-ATTENDEES_CSV = "attendees.csv"
+from pipeline import config
+
+ATTENDEES_CSV = config.ATTENDEES_CSV
 NAME_COLUMN = "Name"
-TRANSCRIPT_FILE = "transcript_original_backup.txt"
-FIX_FILE = "transcript_fix.txt"
+TRANSCRIPT_FILE = config.TRANSCRIPT_WHISPER
+FIX_FILE = config.TRANSCRIPT_FIX
 FIX_WINDOWS = [(145, 185), (238, 280)]   # minutes replaced by FIX_FILE
-OUT_OK = "matched_timestamps.csv"
-OUT_REVIEW = "needs_review.csv"
-CLEAN_TRANSCRIPT = "transcript_clean.txt"
+OUT_OK = config.MATCHED_CSV
+OUT_REVIEW = config.REVIEW_CSV
+CLEAN_TRANSCRIPT = config.TRANSCRIPT_CLEAN
 
 CONFIDENT = 90        # average score of the two best tokens
 MIN_WEAK_CONFIDENT = 80  # and the weaker of those two tokens must be at least this

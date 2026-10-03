@@ -1,9 +1,18 @@
-import subprocess
-import os
+"""Step 2: transcribe the full audio in 1-hour chunks (keeps RAM low) -> data/interim/transcript_whisper.txt
+
+Run from the repo root: python -m pipeline.transcribe_audio [start_chunk]
+(start_chunk > 0 appends, so a crashed run can resume.)
+"""
 import math
+import os
+import subprocess
+import sys
+
 from faster_whisper import WhisperModel
 
-AUDIO_FILE = "livestream_audio.m4a"
+from pipeline import config
+
+AUDIO_FILE = str(config.AUDIO_FILE)
 
 def get_duration(filename):
     result = subprocess.run(
@@ -14,7 +23,7 @@ def get_duration(filename):
     )
     return float(result.stdout.strip())
 
-def split_and_transcribe():
+def split_and_transcribe(start_chunk=0):
     if not os.path.exists(AUDIO_FILE):
         print(f"Error: {AUDIO_FILE} not found!")
         return
@@ -29,10 +38,10 @@ def split_and_transcribe():
     print("Loading AI model...")
     model = WhisperModel("base", device="cpu", compute_type="int8")
     
-    with open("transcript.txt", "a", encoding="utf-8") as f:
-        for i in range(2, num_chunks):
+    with open(config.TRANSCRIPT_WHISPER, "w" if start_chunk == 0 else "a", encoding="utf-8") as f:
+        for i in range(start_chunk, num_chunks):
             start_time = i * chunk_length
-            chunk_file = f"chunk_{i}.m4a"
+            chunk_file = str(config.INTERIM / f"_chunk_{i}.m4a")
             print(f"\n--- Extracting Audio Chunk {i+1} of {num_chunks} ---")
             
             # Use ffmpeg to cut a 1-hour chunk
@@ -45,7 +54,7 @@ def split_and_transcribe():
             print(f"Transcribing Chunk {i+1}...")
             
             # Transcribe just this 1 hour
-            segments, info = model.transcribe(chunk_file, beam_size=5)
+            segments, info = model.transcribe(chunk_file, beam_size=5, language="en")
             
             for segment in segments:
                 # We must add the 1-hour offset back to the timestamp so the final times are correct!
@@ -64,7 +73,7 @@ def split_and_transcribe():
             # Delete the temporary chunk to save hard drive space
             os.remove(chunk_file)
             
-    print("\n✅ Successfully transcribed all 6+ hours of audio! Saved to 'transcript.txt'.")
+    print("\n✅ Successfully transcribed all 6+ hours of audio! Saved to transcript_whisper.txt.")
 
 if __name__ == "__main__":
-    split_and_transcribe()
+    split_and_transcribe(int(sys.argv[1]) if len(sys.argv) > 1 else 0)

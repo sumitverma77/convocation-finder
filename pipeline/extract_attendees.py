@@ -1,9 +1,16 @@
-import pdfplumber
-import pandas as pd
+"""Step 1: pull attendee names out of the seating-number PDF -> data/interim/attendees.csv
+
+Run from the repo root: python -m pipeline.extract_attendees
+"""
 import os
 
-PDF_PATH = r"C:\Users\ASUS\Downloads\chrome files\SEATING NUMBERS.pdf"
-OUTPUT_CSV = "attendees.csv"
+import pandas as pd
+import pdfplumber
+
+from pipeline import config
+
+PDF_PATH = config.SEATING_PDF
+OUTPUT_CSV = config.ATTENDEES_CSV
 
 def extract_names_from_pdf():
     print(f"Reading PDF: {PDF_PATH}")

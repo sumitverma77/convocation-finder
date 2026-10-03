@@ -1,10 +1,9 @@
-# large / intermediate files - not needed to run the app
-*.m4a
+# source media and intermediate files (large / contain raw data) - regenerate with the pipeline
+data/raw/
+data/interim/
 *.wav
-transcript*.txt
-matched_timestamps_NEW.csv
-attendees.csv
-__pycache__/
+*.m4a
 *.vtt
-comparison_report.csv
-matched_whisper_only_backup.csv
+__pycache__/
+.pytest_cache/
+matched_timestamps_NEW.csv

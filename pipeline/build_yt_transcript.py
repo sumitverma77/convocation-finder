@@ -1,11 +1,14 @@
 """Convert YouTube's rolling auto-captions (VTT) into the same "[MM:SS] text" format as transcript.txt.
 
-Run: python build_yt_transcript.py   -> transcript_yt.txt
+Step 4. Run from the repo root: python -m pipeline.build_yt_transcript   -> data/interim/transcript_yt.txt
+Get the VTT first: yt-dlp --skip-download --write-auto-subs --sub-langs en-orig --sub-format vtt -o data/raw/yt_captions <url>
 """
 import re
 
-SRC = "yt_captions.en-orig.vtt"
-OUT = "transcript_yt.txt"
+from pipeline import config
+
+SRC = config.YT_CAPTIONS_VTT
+OUT = config.TRANSCRIPT_YT
 CUE = re.compile(r"^(\d+):(\d+):(\d+)\.\d+ --> ")
 
 lines, last = [], None
