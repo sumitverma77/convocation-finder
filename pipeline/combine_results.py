@@ -25,7 +25,9 @@ from pipeline import match_names as mn
 
 AGREE_SECONDS = 90
 CLUSTER_SECONDS = 60       # candidates closer than this are the same moment
-SINGLE_SOURCE_MIN = 93     # one transcript alone must be very sure
+SINGLE_SOURCE_MIN = 93     # one transcript alone must be very sure ...
+SINGLE_IN_WINDOW_MIN = 88  # ... or a bit less sure if the time fits the expected window and no other student competes
+MARGIN = 4                 # best student for a spoken name must beat the runner-up by this much
 BOTH_SOURCES_MIN = 80
 WINDOW = 45 * 60           # half-width of the expected-time window
 FAR = 2 * WINDOW           # beyond this from the expected time, a match is suspicious
@@ -81,6 +83,19 @@ def main():
                 return float(np.median(list(g.values())))
         return None
 
+    # who else is competing for the same spoken chunk? (source, second) -> scores of all students that list it
+    competitors = {}
+    for src, cands in (("whisper", cand_w), ("youtube", cand_y)):
+        for si_, lst in cands.items():
+            for c in lst:
+                competitors.setdefault((src, c[1]), []).append((c[0], si_))
+
+    def margin(si_, cl):
+        """My score minus the best other student's score for the same spoken chunk (any source in the cluster)."""
+        others = [sc for src in cl["sources"] for t_ in range(cl["t"] - 3, cl["t"] + 4)
+                  for sc, s2 in competitors.get((src, t_), []) if s2 != si_]
+        return cl["score"] - max(others) if others else 100.0
+
     results, candidates = [], []
     counts = {"confident": 0, "possible": 0, "none": 0}
     for si in range(n):
@@ -120,7 +135,10 @@ def main():
         if top3:
             c = top3[0]
             both = len(c["sources"]) == 2
-            strong = (both and c["score"] >= BOTH_SOURCES_MIN) or (c["score"] >= SINGLE_SOURCE_MIN and c["weak"] >= mn.MIN_WEAK_CONFIDENT)
+            strong = ((both and c["score"] >= BOTH_SOURCES_MIN)
+                      or (c["score"] >= SINGLE_SOURCE_MIN and c["weak"] >= mn.MIN_WEAK_CONFIDENT)
+                      or (c["score"] >= SINGLE_IN_WINDOW_MIN and c["weak"] >= mn.MIN_WEAK_CONFIDENT
+                          and c["in_window"] and margin(si, c) >= MARGIN))
             if c["assigned"] and strong and not c["far"]:
                 status = "confident"
             elif c["conf"] >= POSSIBLE_MIN:
